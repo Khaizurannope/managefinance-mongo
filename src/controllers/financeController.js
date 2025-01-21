@@ -2,7 +2,45 @@ const Finance = require('../models/financeModel');
 
 const getFinances = async (req, res) => {
   try {
-    const finances = await Finance.find({ user: req.user.id });
+    const { type, month, year, report } = req.query;
+    const userId = req.user.id;
+
+    let query = { user: userId };
+
+    if (type) {
+      query.type = type;
+    }
+
+    if (month || year) {
+      const monthInt = parseInt(month) || 1;
+      const yearInt = parseInt(year) || new Date().getFullYear();
+
+      query.createdAt = {
+        $gte: new Date(yearInt, monthInt - 1, 1),
+        $lt: new Date(yearInt, monthInt, 1),
+      };
+    }
+
+    const finances = await Finance.find(query);
+
+    if (report) {
+      const totalIncome = finances
+        .filter((item) => item.type === 'income')
+        .reduce((sum, item) => sum + item.amount, 0);
+
+      const totalExpense = finances
+        .filter((item) => item.type === 'expense')
+        .reduce((sum, item) => sum + item.amount, 0);
+
+      const balance = totalIncome - totalExpense;
+
+      return res.status(200).json({
+        totalIncome,
+        totalExpense,
+        balance,
+      });
+    }
+
     res.status(200).json(finances);
   } catch (error) {
     res.status(500).json({ message: 'Terjadi kesalahan server' });
@@ -62,7 +100,7 @@ const deleteFinance = async (req, res) => {
       return res.status(404).json({ message: 'Data tidak ditemukan' });
     }
 
-    await finance.remove();
+    await finance.deleteOne();
     res.status(200).json({ message: 'Data berhasil dihapus' });
   } catch (error) {
     res.status(500).json({ message: 'Gagal menghapus data finance' });
